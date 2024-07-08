@@ -1,0 +1,81 @@
+Parameters:
+  DBUser:
+    Type: String
+  DBPassword:
+    Type: String
+    NoEcho: True
+  DBName:
+    Type: String
+  DBMinCapacity:
+    Type: Number
+  DBMaxCapacity:
+    Type: Number
+  PrivateSubnets:
+    Type: String
+  VpcId:
+    Type: String
+  SecurityGroup:
+    Type: String
+
+Resources:
+  RdsSubnetGroup:
+    Type: "AWS::RDS::DBSubnetGroup"
+    Properties:
+      DBSubnetGroupDescription: description
+      SubnetIds: !Split [',', !Ref PrivateSubnets]
+      
+  RDSSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: ECS Security Group
+      VpcId: !Ref VpcId
+      
+  RDSSecurityGroupFargate:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      GroupId: !Ref RDSSecurityGroup
+      IpProtocol: tcp
+      FromPort: '5432'
+      ToPort: '5432'
+      SourceSecurityGroupId: !Ref SecurityGroup
+      
+  RDSCluster:
+    Type: "AWS::RDS::DBCluster"
+    Properties:
+      DBClusterParameterGroupName:
+        Ref: RDSClusterGroup
+      DBSubnetGroupName:
+        Ref: RdsSubnetGroup
+      DatabaseName: !Ref DBName
+      Engine: aurora-postgresql
+      EngineMode: serverless
+      EngineVersion: 13.14
+      Port: 5432
+      StorageEncrypted: true
+      ScalingConfiguration:
+        AutoPause: true
+        MinCapacity: !Ref DBMinCapacity
+        MaxCapacity: !Ref DBMaxCapacity
+        SecondsUntilAutoPause: 3600
+      VpcSecurityGroupIds:
+      - !Ref RDSSecurityGroup
+      MasterUserPassword:
+        Ref: DBPassword
+      MasterUsername:
+        Ref: DBUser
+        
+  RDSClusterGroup:
+    Type: "AWS::RDS::DBClusterParameterGroup"
+    Properties:
+      Description: "Paramètres du cluster Aurora RDS"
+      Family: aurora-postgresql13
+      Parameters:
+        timezone: Europe/Paris
+
+Outputs:
+  DBIdentifier:
+    Value: !Ref RDSCluster
+  EndpointUrl:
+    Value: !GetAtt RDSCluster.Endpoint.Address
+  EndpointPort:
+    Value: !GetAtt RDSCluster.Endpoint.Port
